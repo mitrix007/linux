@@ -186,7 +186,7 @@ last -aF | head -n4 | tail -n3
 
 ### ===[ Использование дисков ]===
 echo -e "${CYAN}--- Disk Usage (only above ${WARN_USAGE}%) ---${RESET}"
-df -h -x tmpfs -x devtmpfs | while read -r line; do
+df -h -x tmpfs -x devtmpfs -x squashfs | while read -r line; do
     if echo "$line" | grep -qE '^Filesystem'; then
         echo "$line"
         continue

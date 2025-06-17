@@ -14,18 +14,14 @@ ADVICE_FILE="${HOME}/.status_script_advices"
 SCRIPT_PATH=$(realpath "$0")
 SYMLINK_PATH="/usr/bin/status"
 
-### ===[ Проверка интерактивности (исправленная) ]===
-case $- in
-    *i*) ;;
-    *) exit ;;
-esac
+### ===[ Проверка интерактивности ]===
+[[ $- != *i* ]] && return 0 2>/dev/null || :
 
 ### ===[ Система советов ]===
 function show_next_advice() {
-    # Создаем файл советов при первом запуске
     [ ! -f "$ADVICE_FILE" ] && touch "$ADVICE_FILE"
 
-    # Совет 1: Создать симлинк для быстрого доступа
+    # Совет 1
     if ! grep -q "SYMLINK_CREATED" "$ADVICE_FILE"; then
         if [ ! -L "$SYMLINK_PATH" ] || [ "$(realpath "$SYMLINK_PATH")" != "$SCRIPT_PATH" ]; then
             echo -e "${YELLOW}=== Совет 1/3 ===${RESET}"
@@ -39,7 +35,7 @@ function show_next_advice() {
         fi
     fi
 
-    # Совет 2: Добавить в .bashrc для автозапуска
+    # Совет 2
     if ! grep -q "BASHRC_ADDED" "$ADVICE_FILE"; then
         if ! grep -q "$SCRIPT_PATH" "${HOME}/.bashrc"; then
             echo -e "${YELLOW}=== Совет 2/3 ===${RESET}"
@@ -52,15 +48,12 @@ function show_next_advice() {
         fi
     fi
 
-    # Совет 3: Проверка на интерактивность
+    # Совет 3
     if ! grep -q "INTERACTIVE_CHECK_ADDED" "$ADVICE_FILE"; then
-        if ! grep -q "case \$- in" "$SCRIPT_PATH"; then
+        if ! grep -q "case \\$-" "$SCRIPT_PATH"; then
             echo -e "${YELLOW}=== Совет 3/3 ===${RESET}"
             echo -e "Добавьте проверку на интерактивность в начало скрипта:"
-            echo -e "  ${CYAN}case \$ in"
-            echo -e "    *i*) ;;"
-            echo -e "    *) exit ;;"
-            echo -e "  esac${RESET}"
+            echo -e "  ${CYAN}[[ \$- != *i* ]] && return 0 2>/dev/null || :${RESET}"
             echo "INTERACTIVE_CHECK_ADDED" >> "$ADVICE_FILE"
             return 0
         else
@@ -71,10 +64,10 @@ function show_next_advice() {
     return 1
 }
 
-### ===[ Показываем следующий совет ]===
+### ===[ Показываем совет (если интерактивный запуск) ]===
 show_next_advice
 
-### ===[ Чёрный список: точные имена юнитов ]===
+### ===[ Чёрный список и белый список ]===
 ignore_exact="
 chronyd
 crond
@@ -99,12 +92,10 @@ NetworkManager
 polkit
 "
 
-### ===[ Чёрный список: маски (prefix-) ]===
 ignore_prefix="
 systemd-
 "
 
-### ===[ Белый список: нужные сервисы, даже если неактивны ]===
 whitelist="
 nginx
 php-fpm
@@ -133,21 +124,18 @@ echo "
                 ||     ||
 "
 echo -e "${RED}"
-cat /etc/*release | head -n 1
+grep PRETTY_NAME /etc/*release 2>/dev/null | head -n1 | cut -d= -f2 | tr -d '"'
 echo -e "${RESET}"
 
-### ===[ Сбор всех юнитов ]===
+### ===[ Сбор юнитов ]===
 unit_files=$(systemctl list-unit-files --type=service --no-legend | awk '{print $1}' | sed 's/\.service$//')
 active_units=$(systemctl list-units --type=service --state=active --no-legend | awk '{print $1}' | sed 's/\.service$//')
 
-### ===[ Проверка: входит ли имя в точный список ]===
 function in_exact_list() {
     local name=$1
-    local list=$2
-    echo "$list" | grep -qx "$name"
+    echo "$ignore_exact" | grep -qx "$name"
 }
 
-### ===[ Проверка: начинается ли имя с маски из списка ]===
 function in_prefix_list() {
     local name=$1
     for prefix in $ignore_prefix; do
@@ -156,19 +144,16 @@ function in_prefix_list() {
     return 1
 }
 
-### ===[ Получение описания сервиса ]===
 function get_service_description() {
     local name=$1
-    systemctl show "$name.service" --property=Description --no-pager | cut -d= -f2
+    systemctl show "$name.service" --property=Description --no-pager 2>/dev/null | cut -d= -f2
 }
 
-### ===[ Проверка одного юнита ]===
 function check_service() {
     local name="$1"
 
-    if in_exact_list "$name" "$ignore_exact" || in_prefix_list "$name"; then
-        return
-    fi
+    in_exact_list "$name" && return
+    in_prefix_list "$name" && return
 
     if ! echo "$unit_files" | grep -qx "$name"; then
         return
@@ -182,7 +167,6 @@ function check_service() {
     fi
 }
 
-### ===[ Объединённый список для проверки: активные + белые ]===
 combined=$(echo -e "${active_units}\n${whitelist}" | sort -u)
 
 echo -e "${CYAN}--- Service Status ---${RESET}"
@@ -192,7 +176,7 @@ for svc in $combined; do
     check_service "$svc"
 done
 
-### ===[ Пользователи онлайн ]===
+### ===[ Кто залогинен ]===
 echo -e "${CYAN}--- Who is logged in ---${RESET}"
 w
 
@@ -200,7 +184,7 @@ w
 echo -e "${CYAN}--- Last Logins ---${RESET}"
 last -aF | head -n4 | tail -n3
 
-### ===[ Использование диска с подсветкой ]===
+### ===[ Использование дисков ]===
 echo -e "${CYAN}--- Disk Usage (only above ${WARN_USAGE}%) ---${RESET}"
 df -h -x tmpfs -x devtmpfs | while read -r line; do
     if echo "$line" | grep -qE '^Filesystem'; then
@@ -209,10 +193,7 @@ df -h -x tmpfs -x devtmpfs | while read -r line; do
     fi
 
     usep=$(echo "$line" | awk '{ print $(NF-1) }' | tr -d '%')
-
-    if ! [[ "$usep" =~ ^[0-9]+$ ]]; then
-        continue
-    fi
+    [[ ! "$usep" =~ ^[0-9]+$ ]] && continue
 
     if [ "$usep" -ge "$CRIT_USAGE" ]; then
         echo -e "${RED}${line}${RESET}"
@@ -221,7 +202,7 @@ df -h -x tmpfs -x devtmpfs | while read -r line; do
     fi
 done
 
-### ===[ Дополнительная информация ]===
+### ===[ Память и аптайм ]===
 echo -e "${CYAN}--- Memory ---${RESET}"
 free -h
 

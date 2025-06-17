@@ -11,7 +11,7 @@ Ready-to-use solutions for daily sysadmin tasks.
 - 🤖 Automation Tools
 
 ## Usage:
-1. Clone repository: `git clone https://github.com/yourname/linux-scripts.git`
+1. Clone repository: `git clone https://github.com/mitrix007/linux.git`
 2. Make scripts executable: `chmod +x *.sh`
 3. Run with sudo when required
 

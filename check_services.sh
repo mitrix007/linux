@@ -90,10 +90,35 @@ auditd
 lvm2-monitor
 NetworkManager
 polkit
+accounts-daemon
+apache-htcacheclean
+apparmor
+apport
+atd
+blk-availability
+console-setup
+cron
+dbus
+finalrd
+ifupdown-pre
+keyboard-setup
+lxcfs
+networkd-dispatcher
+networking
+open-vm-tools
+resolvconf
+setvtrgb
+ssh
+unattended-upgrades
+vgauth
+VRTSralus.init
+tuned
 "
 
 ignore_prefix="
 systemd-
+rhel-
+snapd
 "
 
 whitelist="
